@@ -9,8 +9,6 @@
 
 Не ищи skill в домашней папке агента, не качай HTML источников в чат
 и не восстанавливай сетку по памяти. Сетку собирает `python3 scripts/build_week.py`.
-Перед сборкой: `git pull --ff-only origin main` и проверь, что есть
-`scripts/grouping.py`. Поле инструкций в Cursor само по git не обновляется.
 Источники: `https://prov-telegraf.ru/teleprogramma/` и `https://tv.yandex.ru/39`
 (при конфликте — Яндекс; для «Россия 1» — **Россия 1-Дон**).
 
