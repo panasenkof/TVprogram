@@ -1,9 +1,24 @@
-Следуй skill в этом репозитории: `.cursor/skills/tv-programma/SKILL.md` и `AGENTS.md`.
+Это файл-инструкция облачного запуска. Поле инструкций в Cursor — копия:
+после правок в git его нужно вставить сюда снова. Перед сборкой всегда
+подтягивай origin/main, иначе сработает снимок среды со старыми скриптами.
 
-Скрипты уже в репозитории: `scripts/build_week.py`, `scripts/grouping.py`,
-`scripts/measure.py`, `scripts/render.js`.
-Не ищи skill в домашней папке облачного агента — его там нет.
-`grouping.py` отдельно не запускай: его подхватывают `build_week.py` и `measure.py`
+```bash
+git fetch origin
+git checkout main
+git pull --ff-only origin main
+test -f scripts/grouping.py
+git log -1 --oneline
+```
+
+Если `scripts/grouping.py` нет — остановись: клонирован не тот репозиторий
+или не ветка `main`.
+
+Дальше следуй skill в этом репозитории: `.cursor/skills/tv-programma/SKILL.md`
+и `AGENTS.md`.
+
+Скрипты: `scripts/build_week.py`, `scripts/grouping.py`, `scripts/measure.py`,
+`scripts/render.js`. Не ищи skill в домашней папке облачного агента.
+`grouping.py` отдельно не запускай: его импортируют `build_week.py` и `measure.py`
 (одинаковые передачи в одну строку; отступ от вертикальной линейки — в measure/render).
 
 Собери телепрограмму для Ростова-на-Дону на СЛЕДУЮЩУЮ неделю (понедельник–воскресенье
