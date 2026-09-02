@@ -3,5 +3,5 @@
     "dockerfile": "Dockerfile",
     "context": ".."
   },
-  "install": "python3 -m pip install --break-system-packages -r requirements.txt && npm install"
+  "install": "python3 -m pip install --break-system-packages -r requirements.txt && npm install && python3 scripts/grouping.py"
 }

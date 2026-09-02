@@ -1,6 +1,13 @@
 import json, os, re, sys
 from fontTools.ttLib import TTFont
 
+_SCRIPTS = os.path.dirname(os.path.abspath(__file__))
+if _SCRIPTS not in sys.path:
+    sys.path.insert(0, _SCRIPTS)
+from grouping import (  # noqa: E402
+    LINE_RE, is_single_time, merge_events, parse_time_token,
+)
+
 FONT_CANDIDATES = [
     (
         '/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf',
@@ -54,7 +61,9 @@ def width_pt(text, pt, bold=False):
 A4_SHORT, A4_LONG = 11906, 16838
 M_TOP, M_BOT, M_LEFT, M_RIGHT = 620, 900, 700, 620
 TIME_INDENT = 1000                      # отступ под колонку времени
-CELL_PAD = 220                          # внутренний зазор ячейки таблицы
+CELL_PAD_LEFT = 140                     # от вертикальной линейки / края колонки
+CELL_PAD_RIGHT = 140
+CELL_PAD = CELL_PAD_LEFT + CELL_PAD_RIGHT
 AFTER = 20                              # интервал после абзаца (40 давало +1 лист: воскресный «хвост»)
 
 def set_geom(landscape, pt):
@@ -72,7 +81,6 @@ def set_geom(landscape, pt):
 set_geom(True, 16)
 
 SKIP = {'Россия 24', 'Муз-ТВ', 'Карусель', 'Пятница!', 'Спас'}
-CUTOFF = 4 * 60 + 30
 FROM, TO = 6 * 60, 25 * 60
 
 def parse(path):
@@ -88,25 +96,22 @@ def parse(path):
             chan = {'name': line[3:].strip(), 'items': []}
             day['channels'].append(chan)
         else:
-            m = re.match(r'^((?:\d{1,2}[.:]\d{2})(?:\s*,\s*\d{1,2}[.:]\d{2})*)\s+(.+)$', line)
+            m = LINE_RE.match(line)
             if m:
                 chan['items'].append((m.group(1), m.group(2)))
     return days
 
 def rows_of(chan):
-    out = []
+    events = []
     for times, title in chan['items']:
-        for t in times.split(','):
-            m = re.match(r'^(\d{1,2})[.:](\d{2})$', t.strip())
-            if not m:
+        for tok in re.split(r'\s*,\s*', times):
+            p = parse_time_token(tok)
+            if not p or not (FROM <= p['sort'] <= TO):
                 continue
-            a = int(m.group(1)) * 60 + int(m.group(2))
-            s = a + 1440 if a < CUTOFF else a
-            if not (FROM <= s <= TO):
-                continue
-            out.append({'label': f'{int(m.group(1)):02d}:{m.group(2)}', 'sort': s, 'title': title})
-    out.sort(key=lambda r: r['sort'])
-    return out
+            events.append({**p, 'title': title})
+    events.sort(key=lambda e: e['sort'])
+    return [{'label': r['label'], 'sort': r['sort'], 'title': r['title']}
+            for r in merge_events(events, sep=':')]
 
 def wrap_lines(title, avail_pt):
     words, lines, cur = title.split(' '), 0, ''
@@ -122,10 +127,15 @@ def block_height(chan, col_w):
     rows = rows_of(chan)
     if not rows:
         return None, 0
-    avail_pt = (col_w - CELL_PAD - TIME_INDENT) / 20
     h = HEAD_H
     for r in rows:
-        h += wrap_lines(r['title'], avail_pt) * LINE + AFTER
+        if is_single_time(r['label']):
+            avail_pt = (col_w - CELL_PAD - TIME_INDENT) / 20
+            n = wrap_lines(r['title'], avail_pt)
+        else:
+            avail_pt = (col_w - CELL_PAD) / 20
+            n = wrap_lines(f"{r['label']} {r['title']}", avail_pt)
+        h += n * LINE + AFTER
     return rows, h
 
 def _bins_ffd(blocks, cap):
@@ -225,6 +235,7 @@ if __name__ == '__main__':
         L = layout(days, cols)
         L.update(pt=pt, pt_ch=PT_CH, line=LINE, after=AFTER, head_before=260, head_after=100,
                  time_indent=TIME_INDENT, landscape=land, usable_w=USABLE_W,
+                 cell_pad_left=CELL_PAD_LEFT, cell_pad_right=CELL_PAD_RIGHT,
                  margins=dict(top=M_TOP, bottom=M_BOT, left=M_LEFT, right=M_RIGHT))
         for d in L['days']:
             d['pages'] = [[{'items': [{'name': b['name'], 'rows': b['rows']} for b in bn['items']]}

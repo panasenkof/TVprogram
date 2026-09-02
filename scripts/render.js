@@ -13,6 +13,33 @@ const SZ_CH = L.pt_ch * 2;
 const COL_W = Math.floor(L.usable_w / L.cols);
 const NONE = { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' };
 
+const SINGLE_TIME = /^\d{2}:\d{2}$/;
+const PAD_L = L.cell_pad_left ?? 140;
+const PAD_R = L.cell_pad_right ?? 140;
+
+function itemParagraph(r) {
+  const spacing = { after: L.after, line: L.line, lineRule: 'atLeast' };
+  const time = new TextRun({ text: r.label, bold: true, font: FONT, size: SZ });
+  if (SINGLE_TIME.test(r.label)) {
+    return new Paragraph({
+      spacing,
+      indent: { left: L.time_indent, hanging: L.time_indent },
+      tabStops: [{ type: TabStopType.LEFT, position: L.time_indent }],
+      children: [
+        time,
+        new TextRun({ text: '\t' + r.title, font: FONT, size: SZ }),
+      ],
+    });
+  }
+  return new Paragraph({
+    spacing,
+    children: [
+      time,
+      new TextRun({ text: ' ' + r.title, font: FONT, size: SZ }),
+    ],
+  });
+}
+
 function blockParagraphs(b) {
   const out = [new Paragraph({
     keepNext: true,
@@ -21,15 +48,7 @@ function blockParagraphs(b) {
     children: [new TextRun({ text: b.name, bold: true, font: FONT, size: SZ_CH })],
   })];
   for (const r of b.rows) {
-    out.push(new Paragraph({
-      spacing: { after: L.after, line: L.line, lineRule: 'atLeast' },
-      indent: { left: L.time_indent, hanging: L.time_indent },
-      tabStops: [{ type: TabStopType.LEFT, position: L.time_indent }],
-      children: [
-        new TextRun({ text: r.label, bold: true, font: FONT, size: SZ }),
-        new TextRun({ text: '\t' + r.title, font: FONT, size: SZ }),
-      ],
-    }));
+    out.push(itemParagraph(r));
   }
   return out;
 }
@@ -54,7 +73,7 @@ for (const day of L.days) {
       cells.push(new TableCell({
         width: { size: COL_W, type: WidthType.DXA },
         verticalAlign: VerticalAlign.TOP,
-        margins: { left: 0, right: 220, top: 0, bottom: 0 },
+        margins: { left: PAD_L, right: PAD_R, top: 0, bottom: 0 },
         borders: {
           top: NONE, bottom: NONE, left: NONE,
           right: i < L.cols - 1

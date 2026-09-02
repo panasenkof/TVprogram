@@ -1,7 +1,10 @@
 Следуй skill в этом репозитории: `.cursor/skills/tv-programma/SKILL.md` и `AGENTS.md`.
 
-Скрипты уже в репозитории: `scripts/build_week.py`, `scripts/measure.py`, `scripts/render.js`.
+Скрипты уже в репозитории: `scripts/build_week.py`, `scripts/grouping.py`,
+`scripts/measure.py`, `scripts/render.js`.
 Не ищи skill в домашней папке облачного агента — его там нет.
+`grouping.py` отдельно не запускай: его подхватывают `build_week.py` и `measure.py`
+(одинаковые передачи в одну строку; отступ от вертикальной линейки — в measure/render).
 
 Собери телепрограмму для Ростова-на-Дону на СЛЕДУЮЩУЮ неделю (понедельник–воскресенье
 после ближайшего воскресенья, если запуск в воскресенье — на неделю, которая начинается

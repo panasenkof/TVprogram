@@ -21,6 +21,11 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+_SCRIPTS = Path(__file__).resolve().parent
+if str(_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS))
+from grouping import merge_events, to_sort  # noqa: E402
+
 UA = (
     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
@@ -335,28 +340,35 @@ def attach_meta(y_items: list[dict], t_items: list[tuple[str, str, str | None]])
 
 
 def group_lines(items: list[dict]) -> list[str]:
-    ordered: list[str] = []
-    buckets: dict[str, dict] = {}
+    events = []
+    seen: set[tuple[int, str]] = set()
+    meta: dict[str, dict] = {}
     for it in items:
+        raw = (it.get("hhmm") or "").replace(":", ".")
+        if "." not in raw:
+            continue
+        hh, mm = raw.split(".", 1)
+        try:
+            sort = to_sort(int(hh), int(mm))
+        except ValueError:
+            continue
         key = it.get("norm") or norm_title(it["title"])
-        if key not in buckets:
-            buckets[key] = {
-                "times": [], "prefixes": [],
-                "title": it["title"], "quoted": False,
-            }
-            ordered.append(key)
-        b = buckets[key]
-        if it["hhmm"] not in b["times"]:
-            b["times"].append(it["hhmm"])
-        if it.get("prefix"):
-            b["prefixes"].append(it["prefix"])
-        b["quoted"] = b["quoted"] or bool(it.get("quoted"))
+        m = meta.setdefault(key, {"prefix": None, "quoted": False})
+        if it.get("prefix") and not m["prefix"]:
+            m["prefix"] = it["prefix"]
+        m["quoted"] = m["quoted"] or bool(it.get("quoted"))
+        if (sort, key) in seen:
+            continue
+        seen.add((sort, key))
+        events.append({"sort": sort, "title": it["title"], "first": it, "key": key})
     out = []
-    for key in ordered:
-        b = buckets[key]
-        prefix = b["prefixes"][0] if b["prefixes"] else None
-        line = format_item(b["title"], prefix, b["quoted"])
-        out.append(f"{', '.join(b['times'])} {line}")
+    for row in merge_events(events, sep="."):
+        m = meta.get(row["key"], {})
+        it = row["first"]
+        prefix = m.get("prefix") or it.get("prefix")
+        quoted = bool(m.get("quoted") or it.get("quoted"))
+        line = format_item(row["title"], prefix, quoted)
+        out.append(f"{row['label']} {line}")
     return out
 
 
