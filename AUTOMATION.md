@@ -16,9 +16,9 @@
 3. `npm install` если нужно, затем `node scripts/render.js layout.json programma.docx`
 4. `soffice --headless --convert-to pdf programma.docx` (или `libreoffice`).
    Не используй `/mnt/skills/public/docx/...`.
-5. Проверь: `pdfinfo programma.pdf | grep Pages` (около 28 страниц), нет пустых
+5. Проверь: `pdfinfo programma.pdf | grep Pages` (около 40 страниц), нет пустых
    листов и оборванных блоков. Две-три страницы: `pdftoppm -jpeg -r 80 programma.pdf p`.
-6. Через MCP yadisk загрузи оба файла в `/Телепрограмма/` как
+6. Через MCP yadisk загрузи оба файла в `/Панасенко/Телепрограмма/` как
    `programma-ГГГГ-ММ-ДД.docx` и `programma-ГГГГ-ММ-ДД.pdf`
    (дата — поле `monday` в `build-report.json`).
 7. Если в отчёте `missing_days` — собери неделю без них и напиши об этом.
