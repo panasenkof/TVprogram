@@ -11,5 +11,6 @@
 Источники: `https://prov-telegraf.ru/teleprogramma/` и `https://tv.yandex.ru/39`
 (при конфликте — Яндекс; для «Россия 1» — **Россия 1-Дон**).
 
-После загрузки на диск вызвать `python3 scripts/notify-telegram.py`.
+Последним шагом отправить в Telegram тот же краткий итоговый отчёт, что и
+в конце запуска: `python3 scripts/notify-telegram.py` (текст через stdin).
 Секреты: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` (только в Cursor Secrets, не в репо).
