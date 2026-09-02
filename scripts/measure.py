@@ -55,7 +55,7 @@ A4_SHORT, A4_LONG = 11906, 16838
 M_TOP, M_BOT, M_LEFT, M_RIGHT = 620, 900, 700, 620
 TIME_INDENT = 1000                      # отступ под колонку времени
 CELL_PAD = 220                          # внутренний зазор ячейки таблицы
-AFTER = 40                              # интервал после абзаца
+AFTER = 20                              # интервал после абзаца (40 давало +1 лист: воскресный «хвост»)
 
 def set_geom(landscape, pt):
     global PAGE_W, PAGE_H, USABLE_W, USABLE_H, PT, PT_CH, LINE, HEAD_H, TITLE_H, TIME_INDENT
@@ -128,19 +128,76 @@ def block_height(chan, col_w):
         h += wrap_lines(r['title'], avail_pt) * LINE + AFTER
     return rows, h
 
-def pack(blocks, cap, cols):
-    """First-Fit-Decreasing: блок целиком в одну колонку."""
+def _bins_ffd(blocks, cap):
     bins = []
     for b in sorted(blocks, key=lambda x: -x['h']):
         for bn in bins:
             if bn['h'] + b['h'] <= cap:
-                bn['items'].append(b); bn['h'] += b['h']; break
+                bn['items'].append(b)
+                bn['h'] += b['h']
+                break
         else:
             bins.append({'items': [b], 'h': b['h']})
-    for bn in bins:
+    return bins
+
+
+def _bins_bfd(blocks, cap):
+    bins = []
+    for b in sorted(blocks, key=lambda x: -x['h']):
+        best, best_left = None, None
+        for i, bn in enumerate(bins):
+            left = cap - bn['h'] - b['h']
+            if left >= 0 and (best_left is None or left < best_left):
+                best, best_left = i, left
+        if best is None:
+            bins.append({'items': [b], 'h': b['h']})
+        else:
+            bins[best]['items'].append(b)
+            bins[best]['h'] += b['h']
+    return bins
+
+
+def _refill(bins, cap):
+    """Переложить хвост в более ранние колонки, если влезает."""
+    bins = [bn for bn in bins if bn['items']]
+    changed = True
+    while changed and len(bins) > 1:
+        changed = False
+        last = bins[-1]
+        keep = []
+        for item in last['items']:
+            best, best_left = None, None
+            for i, bn in enumerate(bins[:-1]):
+                left = cap - bn['h'] - item['h']
+                if left >= 0 and (best_left is None or left < best_left):
+                    best, best_left = i, left
+            if best is None:
+                keep.append(item)
+            else:
+                bins[best]['items'].append(item)
+                bins[best]['h'] += item['h']
+                changed = True
+        if keep:
+            last['items'] = keep
+            last['h'] = sum(x['h'] for x in keep)
+        else:
+            bins.pop()
+    return bins
+
+
+def pack(blocks, cap, cols):
+    """Блок целиком в одну колонку; из FFD/BFD берём меньше колонок."""
+    if not blocks:
+        return []
+    cand = min(
+        (_refill(_bins_ffd(blocks, cap), cap),
+         _refill(_bins_bfd(blocks, cap), cap)),
+        key=len,
+    )
+    for bn in cand:
         bn['items'].sort(key=lambda x: x['rank'])
-    bins.sort(key=lambda bn: min(i['rank'] for i in bn['items']))
-    return [bins[i:i + cols] for i in range(0, len(bins), cols)]
+    cand.sort(key=lambda bn: min(i['rank'] for i in bn['items']))
+    return [cand[i:i + cols] for i in range(0, len(cand), cols)]
 
 def layout(days, cols):
     col_w = USABLE_W // cols
@@ -173,7 +230,7 @@ if __name__ == '__main__':
             d['pages'] = [[{'items': [{'name': b['name'], 'rows': b['rows']} for b in bn['items']]}
                            for bn in p] for p in d['pages']]
         json.dump(L, open(out, 'w'), ensure_ascii=False)
-        print(f"{sum(len(d['pages']) for d in L['days'])} стр/день -> {out}")
+        print(f"{sum(len(d['pages']) for d in L['days'])} стр -> {out}")
         sys.exit()
     best = []
     for land in (True, False):
