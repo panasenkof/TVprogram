@@ -89,7 +89,7 @@ WEEKDAY_SLUG = {
 }
 
 TIME_RE = re.compile(r"^((?:\d{1,2}\.\d{2})(?:\s*,\s*\d{1,2}\.\d{2})*)\s+(.+)$")
-AGE_RE = re.compile(r"\((\d{1,2}\+)\)$")
+AGE_RE = re.compile(r"\s*\((\d{1,2}\+)\)$")
 PREFIX_RE = re.compile(r"^(Т/с|Х/ф|М/ф|Д/ф|М/с|Т/ш|Драмеди)\s+", re.I)
 SLUG_RE = re.compile(
     r"teleprogramma-na-(\d{1,2})-([a-z]+)-(\d{4})-goda", re.I
@@ -186,7 +186,7 @@ def telegraf_index_dates(html: str) -> dict[date, str]:
     return found
 
 
-def parse_telegraf(html: str) -> dict[str, list[tuple[str, str, str | None, str | None]]]:
+def parse_telegraf(html: str) -> dict[str, list[tuple[str, str, str | None]]]:
     by: dict[str, list] = {}
     cur = None
     for p in re.findall(r"<p[^>]*>(.*?)</p>", html, re.S):
@@ -196,11 +196,7 @@ def parse_telegraf(html: str) -> dict[str, list[tuple[str, str, str | None, str 
         m = TIME_RE.match(t)
         if m and cur:
             times, rest = m.group(1), m.group(2).strip()
-            age = None
-            am = AGE_RE.search(rest)
-            if am:
-                age = am.group(1)
-                rest = rest[: am.start()].rstrip()
+            rest = AGE_RE.sub("", rest).rstrip()
             prefix = None
             pm = PREFIX_RE.match(rest)
             if pm:
@@ -212,7 +208,7 @@ def parse_telegraf(html: str) -> dict[str, list[tuple[str, str, str | None, str 
             for tm in times.split(","):
                 tm = tm.strip()
                 if tm:
-                    by.setdefault(cur, []).append((tm, rest, age, prefix))
+                    by.setdefault(cur, []).append((tm, rest, prefix))
             continue
         mapped = TELEGRAF_NAME.get(t)
         if mapped:
@@ -229,6 +225,7 @@ def norm_title(s: str) -> str:
 
 def clean_title(s: str) -> str:
     s = (s or "").strip()
+    s = AGE_RE.sub("", s).rstrip()
     s = re.sub(r"\s*\(с субтитрами\)\s*", "", s, flags=re.I)
     s = re.sub(r"^телеканал\s+", "", s, flags=re.I)
     s = s.replace("«", '"').replace("»", '"').replace("“", '"').replace("”", '"')
@@ -295,12 +292,7 @@ def parse_yandex(html: str, day: date) -> list[dict]:
     return out
 
 
-def pick_age(ages: list[str | None]) -> str | None:
-    vals = [a for a in ages if a]
-    return max(set(vals), key=vals.count) if vals else None
-
-
-def format_item(title: str, age: str | None, prefix: str | None, quoted: bool) -> str:
+def format_item(title: str, prefix: str | None, quoted: bool) -> str:
     title = clean_title(title)
     already = title.startswith("«")
     if prefix:
@@ -309,19 +301,16 @@ def format_item(title: str, age: str | None, prefix: str | None, quoted: bool) -
         title = f"{prefix} {title}"
     elif quoted and not already and not BARE.match(title):
         title = f"«{title}»"
-    if age:
-        title = f"{title} ({age})"
     return title
 
 
-def attach_meta(y_items: list[dict], t_items: list[tuple[str, str, str | None, str | None]]):
+def attach_meta(y_items: list[dict], t_items: list[tuple[str, str, str | None]]):
     by_norm: dict[str, list] = defaultdict(list)
     by_time: dict[str, list] = defaultdict(list)
-    for tm, title, age, prefix in t_items:
+    for tm, title, prefix in t_items:
         hh, mm = tm.split(".")
         rec = {
             "title": clean_title(title),
-            "age": age,
             "prefix": prefix,
             "norm": norm_title(title),
             "quoted": title.strip()[:1] in "«\"",
@@ -340,7 +329,6 @@ def attach_meta(y_items: list[dict], t_items: list[tuple[str, str, str | None, s
         if rec is None:
             timed = [c for c in by_time.get(it["hhmm"], []) if similar(n, c["norm"])]
             rec = timed[0] if timed else None
-        it["age"] = rec["age"] if rec else None
         it["prefix"] = rec["prefix"] if rec and rec["prefix"] else it.get("kind")
         it["quoted"] = bool(rec and rec["quoted"]) or it["title"].startswith("«")
         it["norm"] = n
@@ -353,14 +341,13 @@ def group_lines(items: list[dict]) -> list[str]:
         key = it.get("norm") or norm_title(it["title"])
         if key not in buckets:
             buckets[key] = {
-                "times": [], "ages": [], "prefixes": [],
+                "times": [], "prefixes": [],
                 "title": it["title"], "quoted": False,
             }
             ordered.append(key)
         b = buckets[key]
         if it["hhmm"] not in b["times"]:
             b["times"].append(it["hhmm"])
-        b["ages"].append(it.get("age"))
         if it.get("prefix"):
             b["prefixes"].append(it["prefix"])
         b["quoted"] = b["quoted"] or bool(it.get("quoted"))
@@ -368,7 +355,7 @@ def group_lines(items: list[dict]) -> list[str]:
     for key in ordered:
         b = buckets[key]
         prefix = b["prefixes"][0] if b["prefixes"] else None
-        line = format_item(b["title"], pick_age(b["ages"]), prefix, b["quoted"])
+        line = format_item(b["title"], prefix, b["quoted"])
         out.append(f"{', '.join(b['times'])} {line}")
     return out
 
@@ -441,12 +428,11 @@ def assemble(days: list[date], tele_html: dict[date, str], yandex_items: dict) -
                 report["yandex_days"] += 1
             elif titems:
                 tmp = []
-                for tm, title, age, prefix in titems:
+                for tm, title, prefix in titems:
                     hh, mm = tm.split(".")
                     tmp.append({
                         "hhmm": f"{int(hh):02d}.{mm}",
                         "title": title,
-                        "age": age,
                         "prefix": prefix,
                         "quoted": title.strip()[:1] in "«\"",
                         "norm": norm_title(title),
