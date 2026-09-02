@@ -1,0 +1,13 @@
+node_modules/
+__pycache__/
+*.pyc
+nedelya.txt
+layout.json
+programma.docx
+programma.pdf
+programma-*.docx
+programma-*.pdf
+p-*.jpg
+p*.jpg
+.env
+.env.*
