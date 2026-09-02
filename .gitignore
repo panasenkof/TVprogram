@@ -3,6 +3,7 @@ __pycache__/
 *.pyc
 nedelya.txt
 layout.json
+build-report.json
 programma.docx
 programma.pdf
 programma-*.docx

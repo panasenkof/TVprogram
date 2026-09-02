@@ -10,6 +10,7 @@
 ```bash
 pip install -r requirements.txt
 npm install
+python3 scripts/build_week.py
 python3 scripts/measure.py nedelya.txt 12 2 0 layout.json
 node scripts/render.js layout.json programma.docx
 soffice --headless --convert-to pdf programma.docx
