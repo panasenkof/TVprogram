@@ -19,7 +19,8 @@ node scripts/render.js layout.json programma.docx
 soffice --headless --convert-to pdf programma.docx
 ```
 
-## Автоматизация Cursor
+После сборки агент вызывает `python3 scripts/notify-telegram.py`.
+Токен бота в репозиторий не класть: только секреты Cursor Cloud Agents.
 
 Репозиторий нужно подключить в автоматизации (поле репозитория / environment).
 Без него облачный агент стартует с пустой папкой и не находит skill и скрипты.

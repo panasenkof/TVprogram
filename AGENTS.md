@@ -10,3 +10,6 @@
 и не восстанавливай сетку по памяти. Сетку собирает `python3 scripts/build_week.py`.
 Источники: `https://prov-telegraf.ru/teleprogramma/` и `https://tv.yandex.ru/39`
 (при конфликте — Яндекс; для «Россия 1» — **Россия 1-Дон**).
+
+После загрузки на диск вызвать `python3 scripts/notify-telegram.py`.
+Секреты: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` (только в Cursor Secrets, не в репо).
