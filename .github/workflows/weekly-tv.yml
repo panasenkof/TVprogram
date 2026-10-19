@@ -1,0 +1,81 @@
+name: Weekly TV programme
+
+on:
+  schedule:
+    # Sunday 10:00 Europe/Moscow (UTC+3).
+    - cron: '0 7 * * 0'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Пробная сборка: без Яндекс Диска и Telegram'
+        type: boolean
+        required: true
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: weekly-tv-programme
+  cancel-in-progress: false
+
+env:
+  TZ: Europe/Moscow
+  PYTHONUNBUFFERED: '1'
+  TV_DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && 'true' || 'false' }}
+
+jobs:
+  programme:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+          cache: pip
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install document tools and fonts
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends libreoffice-writer poppler-utils fonts-liberation fontconfig
+          fc-cache -f
+      - name: Install dependencies
+        run: |
+          python3 -m pip install -r requirements.txt
+          npm ci --ignore-scripts --no-audit --no-fund
+      - name: Build and check documents
+        run: python3 scripts/weekly.py build
+      - name: Upload to Yandex Disk
+        if: ${{ env.TV_DRY_RUN != 'true' }}
+        env:
+          YADISK_TOKEN: ${{ secrets.YADISK_TOKEN }}
+        run: python3 scripts/weekly.py upload
+      - name: Prepare final report even after failure
+        if: ${{ always() }}
+        env:
+          TV_JOB_STATUS: ${{ job.status }}
+          TELEGRAM_BOT_TOKEN: ${{ env.TV_DRY_RUN != 'true' && secrets.TELEGRAM_BOT_TOKEN || '' }}
+          TELEGRAM_CHAT_ID: ${{ env.TV_DRY_RUN != 'true' && secrets.TELEGRAM_CHAT_ID || '' }}
+        run: python3 scripts/weekly.py report
+      - name: Save documents, checks, previews and report
+        if: ${{ always() }}
+        id: artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: tv-programme-${{ github.run_id }}-${{ github.run_attempt }}
+          path: output/
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Send the same report to Telegram
+        if: ${{ always() && env.TV_DRY_RUN != 'true' }}
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TV_ARTIFACT_STATUS: ${{ steps.artifacts.outcome }}
+        run: python3 scripts/weekly.py notify

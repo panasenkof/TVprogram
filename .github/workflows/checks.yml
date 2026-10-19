@@ -1,0 +1,45 @@
+name: Automation checks
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+          cache: pip
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends libreoffice-writer poppler-utils fonts-liberation fontconfig
+          fc-cache -f
+          python3 -m pip install -r requirements.txt
+          npm ci --ignore-scripts --no-audit --no-fund
+      - name: Regression tests (no network or secrets)
+        run: python3 -m unittest discover -s tests -v
+      - name: Seven-day DOCX/PDF smoke test (no network or secrets)
+        run: python3 scripts/smoke_render.py --output-dir output/smoke
+      - uses: actions/upload-artifact@v4
+        if: ${{ always() }}
+        with:
+          name: smoke-render
+          path: output/smoke/
+          if-no-files-found: ignore
+          retention-days: 7
