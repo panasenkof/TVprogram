@@ -94,7 +94,7 @@ WEEKDAY_SLUG = {
 }
 
 TIME_RE = re.compile(r"^((?:\d{1,2}\.\d{2})(?:\s*,\s*\d{1,2}\.\d{2})*)\s+(.+)$")
-AGE_RE = re.compile(r"\s*\((\d{1,2}\+)\)$")
+AGE_RE = re.compile(r"\s*(?:\(\d{1,2}\+\)|(?<!\w)\d{1,2}\+)\s*$")
 PREFIX_RE = re.compile(r"^(Т/с|Х/ф|М/ф|Д/ф|М/с|Т/ш|Драмеди)\s+", re.I)
 SLUG_RE = re.compile(
     r"teleprogramma-na-(\d{1,2})-([a-z]+)-(\d{4})-goda", re.I
@@ -559,3 +559,4 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
+
