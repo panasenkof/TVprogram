@@ -381,7 +381,9 @@ def yandex_url(fid: int, d: date) -> str:
     return f"https://tv.yandex.ru/39/channel/{fid}?date={d.isoformat()}"
 
 
-def load_week_sources(days: list[date], index_slugs: dict[date, str], cache: Path | None, workers: int):
+def load_week_sources(days: list[date], index_slugs: dict[date, str], cache: Path | None,
+                      workers: int, source_errors: list[str] | None = None):
+    """Handle failures per source/day/channel; a bad response cannot cancel the week."""
     tele_html: dict[date, str] = {}
     yandex_items: dict[tuple[date, str], list[dict]] = {}
 
@@ -399,12 +401,25 @@ def load_week_sources(days: list[date], index_slugs: dict[date, str], cache: Pat
                     cached_get, yandex_url(fid, d), ypath
                 )))
         for kind, d, cname, fut in jobs:
-            html = fut.result()
-            if kind == "t":
-                if html and "<title>Новости, События, Аналитика</title>" not in html[:800]:
-                    tele_html[d] = html
-            else:
-                yandex_items[(d, cname)] = parse_yandex(html, d) if html else []
+            try:
+                html = fut.result()
+                if kind == "t":
+                    if html and "<title>Новости, События, Аналитика</title>" not in html[:800]:
+                        tele_html[d] = html
+                else:
+                    yandex_items[(d, cname)] = parse_yandex(html, d) if html else []
+            except Exception as exc:
+                # All 112 jobs are independent. Missing Yandex data can be supplied
+                # by Telegraf in assemble(); do not abort the other jobs.
+                source = f"Телеграф {d.isoformat()}" if kind == "t" else (
+                    f"Яндекс {d.isoformat()} {cname}"
+                )
+                note = f"{source}: {type(exc).__name__} при обработке ответа"
+                print(f"warn: {note}", file=sys.stderr)
+                if source_errors is not None:
+                    source_errors.append(note)
+                if kind == "y":
+                    yandex_items[(d, cname)] = []
     return tele_html, yandex_items
 
 
@@ -511,17 +526,19 @@ def main(argv: list[str] | None = None) -> int:
             chosen, kind = next_week, "next"
             reason = f"telegraf index has {nxt_cov}/7 days of next week"
 
+    source_errors: list[str] = []
     tele_html, yandex_items = load_week_sources(
-        chosen, index_slugs, cache, args.workers
+        chosen, index_slugs, cache, args.workers, source_errors=source_errors
     )
     if args.week == "auto" and kind == "next" and not week_is_usable(tele_html, yandex_items):
         reason += "; fetched next week is empty → current"
         chosen, kind = cur_week, "current"
         tele_html, yandex_items = load_week_sources(
-            chosen, index_slugs, cache, args.workers
+            chosen, index_slugs, cache, args.workers, source_errors=source_errors
         )
 
     text, report = assemble(chosen, tele_html, yandex_items)
+    report["source_errors"] = source_errors
     if not text.strip():
         print("error: no schedule for any day; not inventing a grid", file=sys.stderr)
         Path(args.report).write_text(

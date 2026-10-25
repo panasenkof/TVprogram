@@ -123,7 +123,8 @@ def report_text(state: dict, report: dict, dry_run: bool, job_status: str) -> st
     if state.get('build_ok') and not dry_run and len(uploaded) != 2 and not errors:
         errors.append('Не все файлы загружены на Яндекс Диск')
     partial = bool(report.get('missing_days') or report.get('both_empty') or
-                   report.get('telegraf_fallback') or report.get('kind') == 'current')
+                   report.get('telegraf_fallback') or report.get('source_errors') or
+                   report.get('kind') == 'current')
     status = 'ошибка' if errors else ('частично' if partial else 'успех')
     lines = ['Телепрограмма — ' + status + (' (пробный запуск)' if dry_run else '')]
     monday = report.get('monday') or (report.get('week') or [None])[0]
@@ -146,6 +147,10 @@ def report_text(state: dict, report: dict, dry_run: bool, job_status: str) -> st
     lines.append(f'Источники: Телеграф {report.get("telegraf_days", 0)}/7 дней; '
                  f'Яндекс {report.get("yandex_days", 0)} канал-дней; '
                  f'подстановка Телеграфа {len(fallback)}')
+    source_errors = report.get('source_errors', [])
+    if source_errors:
+        lines.append(f'Ошибки источников: {len(source_errors)}; ' + '; '.join(source_errors[:3]) +
+                     ('; полный список в build-report.json' if len(source_errors) > 3 else ''))
     if report.get('kind') == 'current':
         lines.append('Взята текущая неделя: ' + report.get('reason', 'следующая недоступна'))
     if errors:
