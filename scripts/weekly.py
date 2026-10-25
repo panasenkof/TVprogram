@@ -82,11 +82,43 @@ def build(out: Path) -> None:
         shutil.rmtree(out / 'lo-profile', ignore_errors=True)
 
 
+def check_publication_readiness(report: dict) -> None:
+    """Fail closed: never silently overwrite Disk files with stale/incomplete listings."""
+    monday_str = report.get('monday', '')
+    try:
+        monday = date.fromisoformat(monday_str)
+    except (TypeError, ValueError):
+        raise ValueError('Нет проверенной даты понедельника; загрузка отменена') from None
+    expected = [(monday + timedelta(days=i)).isoformat() for i in range(7)]
+    if monday.weekday() != 0 or report.get('week') != expected:
+        raise ValueError('В отчёте неполная или некорректная неделя; загрузка отменена')
+    if report.get('kind') != 'next':
+        raise ValueError('Собрана текущая, а не следующая неделя; загрузка на Диск отменена')
+    missing = report.get('missing_days') or []
+    if missing:
+        raise ValueError('В телепрограмме отсутствуют дни: ' + ', '.join(missing))
+    # 15 channels * 7 days, with an allowed tolerance for occasional missing
+    # individual channels. Missing an entire day or >=11 channel-days blocks.
+    missing_channels = report.get('both_empty')
+    if not isinstance(missing_channels, list):
+        raise ValueError('Нет списка проверенных каналов; загрузка отменена')
+    from collections import Counter
+    per_day = Counter(item.split(' ', 1)[0] for item in missing_channels)
+    if len(missing_channels) > 10 or any(count > 3 for count in per_day.values()):
+        raise ValueError(
+            f'Слишком неполная сетка: отсутствуют {len(missing_channels)} из 105 '
+            'канал-дней (лимит 10, не более 3 в один день); загрузка отменена'
+        )
+
+
 def upload(out: Path) -> None:
     state = read_json(out / 'run-state.json')
     if not state.get('build_ok'):
         raise RuntimeError('Документы не прошли проверку, загрузка отменена')
     try:
+        state['stage'] = 'preflight'
+        write_json(out / 'run-state.json', state)
+        check_publication_readiness(read_json(out / 'build-report.json'))
         state['stage'] = 'upload'
         disk = DiskClient(os.environ.get('YADISK_TOKEN', ''))
         disk.ensure_folder()
