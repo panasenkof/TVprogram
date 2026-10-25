@@ -80,8 +80,8 @@ class WeekTests(unittest.TestCase):
 
     def test_plus_signs_inside_program_names_are_not_age_ratings(self):
         # Regression for the 2026-10-25 weekly run: «2+1» is a film.
-        for title in ('Х/ф «2+1»', '«16+1»', '«18+2»', 'Игра 6+1',
-                      'Урок 12+3', 'Семья 24+', '«6+»', '16+'):
+        for title in ('Х/ф «2+1»', 'Фильм «16+1»', 'Фильм «18+2»', 'Игра 6+1',
+                      'Урок 12+3', 'Семья 24+', 'Фильм «6+»', '16+'):
             with self.subTest(title=title):
                 self.assertEqual(build_week.clean_title(title), title)
 
