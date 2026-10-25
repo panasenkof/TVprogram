@@ -18,6 +18,7 @@ import check_pdf
 import upload_yadisk
 import weekly
 import smoke_render
+import measure
 
 
 def response(payload):
@@ -394,6 +395,25 @@ class ReportingTests(unittest.TestCase):
             self.assertEqual(state['error'], 'build failed')
             with self.assertRaisesRegex(RuntimeError, 'не прошли проверку'):
                 weekly.upload(out)
+
+
+class LayoutEstimationTests(unittest.TestCase):
+    def test_long_unspaced_word_wraps_to_multiple_lines(self):
+        measure.set_geom(False, 12)
+        try:
+            available = 180
+            word = 'Сверхдлинноесловобезразделителей' * 6
+            self.assertGreater(measure.wrap_lines(word, available), 1)
+            self.assertGreater(measure.wrap_lines(word, available),
+                               measure.wrap_lines('Новости', available))
+            self.assertEqual(measure.wrap_lines('', available), 0)
+            self.assertEqual(measure.wrap_lines('Новости', available), 1)
+        finally:
+            measure.set_geom(True, 16)
+
+    def test_too_narrow_layout_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, 'Нет места'):
+            measure.wrap_lines('Новости', 0)
 
 
 class PdfTests(unittest.TestCase):

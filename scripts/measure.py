@@ -114,14 +114,40 @@ def rows_of(chan):
             for r in merge_events(events, sep=':')]
 
 def wrap_lines(title, avail_pt):
-    words, lines, cur = title.split(' '), 0, ''
-    for w in words:
-        trial = (cur + ' ' + w).strip()
-        if width_pt(trial, PT) <= avail_pt or not cur:
+    """Estimate wrapped lines including exceptionally long unspaced words.
+
+    The previous estimator put an arbitrarily long first word on one line,
+    undercounting DOCX height and occasionally causing an extra PDF page.
+    """
+    if not title.strip():
+        return 0
+    if avail_pt <= 0:
+        raise ValueError('Нет места для текста в колонке')
+    lines, cur = 1, ''
+    uncertain_breaks = 0
+    for word in title.split():
+        trial = (cur + ' ' + word) if cur else word
+        if width_pt(trial, PT) <= avail_pt:
             cur = trial
-        else:
-            lines += 1; cur = w
-    return lines + (1 if cur else 0)
+            continue
+        if cur:
+            lines += 1
+            cur = ''
+        if width_pt(word, PT) <= avail_pt:
+            cur = word
+            continue
+        # A long word must wrap by individual glyphs, not overflow as one line.
+        # LibreOffice may use different fallback glyph/line-break metrics.
+        # Reserve one safety line per such word instead of risking a new page.
+        uncertain_breaks += 1
+        for character in word:
+            trial = cur + character
+            if cur and width_pt(trial, PT) > avail_pt:
+                lines += 1
+                cur = character
+            else:
+                cur = trial
+    return lines + uncertain_breaks
 
 def block_height(chan, col_w):
     rows = rows_of(chan)
@@ -211,7 +237,8 @@ def pack(blocks, cap, cols):
 
 def layout(days, cols):
     col_w = USABLE_W // cols
-    cap = int((USABLE_H - TITLE_H) * 0.97)
+    # Reserve space for minor DOCX/LibreOffice differences in line metrics.
+    cap = int((USABLE_H - TITLE_H) * 0.95)
     out = []
     for day in days:
         blocks, over = [], []
