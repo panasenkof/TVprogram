@@ -36,6 +36,8 @@ def fixture_week(days: list[date]) -> str:
                 result.append(time + ' ' + title)
             if channel == 'ТНТ' and day_index == 3:
                 result.append('22.35 Х/ф «2+1»')
+            if channel_index == 0 and day_index in (0, 6):
+                result.append('00.30 Ночная программа')
     return '\n'.join(result) + '\n'
 
 
