@@ -25,6 +25,7 @@ _SCRIPTS = Path(__file__).resolve().parent
 if str(_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS))
 from grouping import merge_events, to_sort  # noqa: E402
+from age_rating import AGE_RE  # noqa: E402
 
 UA = (
     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
@@ -94,7 +95,7 @@ WEEKDAY_SLUG = {
 }
 
 TIME_RE = re.compile(r"^((?:\d{1,2}\.\d{2})(?:\s*,\s*\d{1,2}\.\d{2})*)\s+(.+)$")
-AGE_RE = re.compile(r"\s*(?:\(\d{1,2}\+\)|(?<!\w)\d{1,2}\+)\s*$")
+
 PREFIX_RE = re.compile(r"^(Т/с|Х/ф|М/ф|Д/ф|М/с|Т/ш|Драмеди)\s+", re.I)
 SLUG_RE = re.compile(
     r"teleprogramma-na-(\d{1,2})-([a-z]+)-(\d{4})-goda", re.I
