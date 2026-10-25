@@ -235,6 +235,13 @@ class ReportingTests(unittest.TestCase):
                 (out / name).write_bytes(b'document')
             weekly.write_json(out / 'run-state.json', {
                 'build_ok': True, 'files': ['a.docx', 'a.pdf'], 'uploaded': []})
+            monday = date(2026, 11, 2)
+            weekly.write_json(out / 'build-report.json', {
+                'monday': monday.isoformat(), 'kind': 'next',
+                'week': [(monday + build_week.timedelta(days=i)).isoformat()
+                         for i in range(7)],
+                'missing_days': [], 'both_empty': [],
+            })
             disk = Mock()
             disk.upload.side_effect = [None, upload_yadisk.DiskError('second file failed')]
             with patch.object(weekly, 'DiskClient', return_value=disk), self.assertRaises(upload_yadisk.DiskError):
@@ -242,6 +249,57 @@ class ReportingTests(unittest.TestCase):
             state = weekly.read_json(out / 'run-state.json')
             self.assertEqual(state['uploaded'], [upload_yadisk.FOLDER + '/a.docx'])
             self.assertIn('second file failed', state['error'])
+
+    def test_upload_preflight_rejects_stale_or_incomplete_before_disk_access(self):
+        monday = date(2026, 11, 2)
+        full = {
+            'monday': monday.isoformat(),
+            'week': [(monday + build_week.timedelta(days=i)).isoformat()
+                     for i in range(7)],
+            'kind': 'next', 'missing_days': [], 'both_empty': [],
+        }
+        invalid = [
+            {'kind': 'current'},
+            {'missing_days': ['2026-11-04']},
+            {'both_empty': ['2026-11-02 НТВ', '2026-11-02 ТНТ',
+                            '2026-11-02 СТС', '2026-11-02 Россия 1']},
+            {'both_empty': [f'2026-11-02 канал-{i}' for i in range(11)]},
+            {'week': full['week'][:6]},
+        ]
+        for change in invalid:
+            with self.subTest(change=change), tempfile.TemporaryDirectory() as folder, \
+                    patch.object(weekly, 'DiskClient') as disk:
+                out = Path(folder)
+                weekly.write_json(out / 'run-state.json', {
+                    'build_ok': True, 'files': ['test.docx', 'test.pdf'], 'uploaded': [],
+                })
+                weekly.write_json(out / 'build-report.json', {**full, **change})
+                with self.assertRaisesRegex(ValueError, 'загрузк|неполная|неполная|отсутствуют'):
+                    weekly.upload(out)
+                self.assertEqual(weekly.read_json(out / 'run-state.json')['uploaded'], [])
+                disk.assert_not_called()
+
+    def test_upload_preflight_accepts_complete_next_week(self):
+        monday = date(2026, 11, 2)
+        report = {
+            'monday': monday.isoformat(),
+            'week': [(monday + build_week.timedelta(days=i)).isoformat()
+                     for i in range(7)],
+            'kind': 'next', 'missing_days': [],
+            'both_empty': ['2026-11-02 НТВ', '2026-11-02 СТС'],
+        }
+        weekly.check_publication_readiness(report)
+
+    def test_empty_yandex_group_uses_telegraf_or_counts_missing(self):
+        day = date(2026, 11, 2)
+        yandex = {(day, 'Первый канал'): [{'hhmm': 'bad', 'title': 'Новости'}]}
+        with patch.object(build_week, 'parse_telegraf', return_value={
+                'Первый канал': [('09.00', 'Новости', None)]}):
+            text, report = build_week.assemble([day], {day: 'fixture'}, yandex)
+        self.assertIn('Новости', text)
+        self.assertEqual(report['yandex_days'], 0)
+        self.assertEqual(report['telegraf_fallback'], [f'{day.isoformat()} Первый канал'])
+        self.assertIn(f'{day.isoformat()} НТВ', report['both_empty'])
 
     def test_telegram_uses_identical_report_over_stdin_and_failure_is_nonfatal(self):
         with tempfile.TemporaryDirectory() as folder, patch.dict(os.environ, {
