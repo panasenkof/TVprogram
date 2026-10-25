@@ -31,6 +31,8 @@ def fixture_week(days: list[date]) -> str:
                 elif slot == 4 and channel_index % 4 == 0:
                     title = ('Документальный фильм «Очень длинное название '
                              'о путешествии по огромному миру и его открытиях»')
+                elif day_index == 0 and channel_index == 0 and slot == 5:
+                    title = 'Сверхдлинноесловобезразделителей' * 5
                 else:
                     title = f'Передача {day_index + 1}-{channel_index + 1}-{slot + 1}'
                 result.append(time + ' ' + title)
