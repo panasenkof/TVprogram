@@ -74,8 +74,16 @@ class WeekTests(unittest.TestCase):
         self.assertEqual(dict(build_week.CHANNELS)['Россия 1'], 31)
 
     def test_remove_both_forms_of_trailing_age_rating(self):
-        for title in ('Фильм (12+)', 'Фильм 16+', 'Фильм (0+)  '):
+        for title in ('Фильм (12+)', 'Фильм 16+', 'Фильм (0+)  ',
+                      'Фильм(18+)', 'Фильм 6+'):
             self.assertEqual(build_week.clean_title(title), 'Фильм')
+
+    def test_plus_signs_inside_program_names_are_not_age_ratings(self):
+        # Regression for the 2026-10-25 weekly run: «2+1» is a film.
+        for title in ('Х/ф «2+1»', '«16+1»', '«18+2»', 'Игра 6+1',
+                      'Урок 12+3', 'Семья 24+', '«6+»', '16+'):
+            with self.subTest(title=title):
+                self.assertEqual(build_week.clean_title(title), title)
 
 
 class DiskTests(unittest.TestCase):
@@ -251,6 +259,34 @@ class PdfTests(unittest.TestCase):
             with patch.object(check_pdf.subprocess, 'run', return_value=Mock(stdout=bbox)), \
                     self.assertRaisesRegex(ValueError, 'не найден полный текст'):
                 check_pdf.check_pdf(Path('unused.pdf'), self.layout())
+
+    def _pdf_with_title(self, title):
+        layout = self.layout()
+        block = layout['days'][0]['pages'][0][0]['items'][0]
+        block['name'] = 'НТВ'
+        block['rows'][0]['title'] = title
+        bbox = ('''<html xmlns="http://www.w3.org/1999/xhtml"><page width="595" height="842">
+          <word xMin="50" xMax="80" yMin="60">НТВ</word>
+          <word xMin="50" xMax="80" yMin="90">09:00</word>
+          <word xMin="100" xMax="210" yMin="90.1">''' + title +
+                '''</word></page></html>''').encode('utf-8')
+        return layout, bbox
+
+    def test_pdf_accepts_plus_in_film_names(self):
+        # Must pass the actual PDF validation path, not only title cleansing.
+        for title in ('Х/ф «2+1»', '«16+1»', 'Фильм 18+2', 'Игра 12+3'):
+            with self.subTest(title=title):
+                layout, bbox = self._pdf_with_title(title)
+                with patch.object(check_pdf.subprocess, 'run', return_value=Mock(stdout=bbox)):
+                    self.assertTrue(check_pdf.check_pdf(Path('unused.pdf'), layout)['ok'])
+
+    def test_pdf_rejects_genuine_age_rating_suffixes(self):
+        for title in ('Новости (12+)', 'Фильм 16+', 'Мультфильм(6+)'):
+            with self.subTest(title=title):
+                layout, bbox = self._pdf_with_title(title)
+                with patch.object(check_pdf.subprocess, 'run', return_value=Mock(stdout=bbox)), \
+                        self.assertRaisesRegex(ValueError, 'возрастной ценз'):
+                    check_pdf.check_pdf(Path('unused.pdf'), layout)
 
     def test_extra_blank_page_is_rejected(self):
         bbox = b'<html xmlns="http://www.w3.org/1999/xhtml"><page/><page/></html>'
