@@ -124,6 +124,7 @@ def wrap_lines(title, avail_pt):
     if avail_pt <= 0:
         raise ValueError('Нет места для текста в колонке')
     lines, cur = 1, ''
+    uncertain_breaks = 0
     for word in title.split():
         trial = (cur + ' ' + word) if cur else word
         if width_pt(trial, PT) <= avail_pt:
@@ -136,6 +137,9 @@ def wrap_lines(title, avail_pt):
             cur = word
             continue
         # A long word must wrap by individual glyphs, not overflow as one line.
+        # LibreOffice may use different fallback glyph/line-break metrics.
+        # Reserve one safety line per such word instead of risking a new page.
+        uncertain_breaks += 1
         for character in word:
             trial = cur + character
             if cur and width_pt(trial, PT) > avail_pt:
@@ -143,7 +147,7 @@ def wrap_lines(title, avail_pt):
                 cur = character
             else:
                 cur = trial
-    return lines
+    return lines + uncertain_breaks
 
 def block_height(chan, col_w):
     rows = rows_of(chan)
@@ -233,7 +237,8 @@ def pack(blocks, cap, cols):
 
 def layout(days, cols):
     col_w = USABLE_W // cols
-    cap = int((USABLE_H - TITLE_H) * 0.97)
+    # Reserve space for minor DOCX/LibreOffice differences in line metrics.
+    cap = int((USABLE_H - TITLE_H) * 0.95)
     out = []
     for day in days:
         blocks, over = [], []
