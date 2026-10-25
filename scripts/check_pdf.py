@@ -7,6 +7,8 @@ import re
 import subprocess
 import sys
 import xml.etree.ElementTree as ET
+
+from age_rating import AGE_RE
 from pathlib import Path
 
 
@@ -78,8 +80,13 @@ def check_pdf(pdf: Path, layout: dict, previews: Path | None = None) -> dict:
                     if normalized(item) not in text:
                         raise ValueError(f"PDF, страница {number}, колонка {col + 1}: "
                                          f"не найден полный текст блока «{block['name']}»")
-                    if re.search(r'\b\d{1,2}\+', item):
-                        raise ValueError('В телепрограмме остался возрастной ценз')
+            for row in block['rows']:
+                if AGE_RE.search(row['title']):
+                    raise ValueError(
+                        f"PDF, страница {number}, колонка {col + 1}: "
+                        f"возрастной ценз в «{block['name']}» "
+                        f"({row['label']}: {row['title']})"
+                    )
     return {'pages': len(actual), 'expected_pages': len(expected),
             'checked_columns': True, 'checked_all_rows': True, 'ok': True}
 
