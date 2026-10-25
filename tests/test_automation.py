@@ -17,6 +17,7 @@ import build_week
 import check_pdf
 import upload_yadisk
 import weekly
+import smoke_render
 
 
 def response(payload):
@@ -28,6 +29,44 @@ def response(payload):
 
 
 class WeekTests(unittest.TestCase):
+    def test_varying_week_fixture_has_7_days_and_105_channel_blocks(self):
+        monday = date(2026, 10, 26)
+        days = [monday + build_week.timedelta(days=i) for i in range(7)]
+        text = smoke_render.fixture_week(days)
+        self.assertEqual(text.count('# '), 7)
+        self.assertEqual(text.count('== '), 105)
+        self.assertIn('22.35 Х/ф «2+1»', text)
+        self.assertIn('00.30', text)
+        self.assertIn('Передача 1-', text)
+        self.assertIn('Передача 7-', text)
+
+    def test_yandex_programme_broadcast_day_rollover(self):
+        day = date(2026, 10, 26)
+        events = [
+            {'start': '2026-10-26T06:00:00+03:00',
+             'program': {'title': 'Новости (12+)'}},
+            {'start': '2026-10-27T01:15:00+03:00',
+             'program': {'title': 'Х/ф «2+1» (16+)'}},
+            {'start': '2026-10-27T05:15:00+03:00',
+             'program': {'title': 'Следующий день'}},
+            {'start': '2026-10-26T03:20:00+03:00',
+             'program': {'title': 'Предыдущий день'}},
+        ]
+        html = 'window.__INITIAL_STATE__ = ' + json.dumps({
+            'channel': {'schedule': {'events': events}}}, ensure_ascii=False)
+        result = build_week.parse_yandex(html, day)
+        self.assertEqual([r['hhmm'] for r in result], ['06.00', '01.15'])
+        self.assertEqual([r['title'] for r in result], ['Новости', 'Х/ф «2+1»'])
+
+    def test_telegraf_age_suffix_and_numbered_film(self):
+        html = ('<p>НТВ</p><p>09.00 Новости (12+)</p>'
+                '<p>22.35 Х/ф "2+1" (16+)</p>')
+        result = build_week.parse_telegraf(html)
+        self.assertEqual(result['НТВ'], [
+            ('09.00', 'Новости', None),
+            ('22.35', '«2+1»', 'Х/ф'),
+        ])
+
     def test_sunday_and_monday_target_weeks(self):
         self.assertEqual(build_week.weeks_for(date(2026, 10, 18))[0][0], date(2026, 10, 19))
         self.assertEqual(build_week.weeks_for(date(2026, 10, 19))[0][0], date(2026, 10, 26))
