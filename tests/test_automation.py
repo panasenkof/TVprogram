@@ -212,6 +212,19 @@ class ReportingTests(unittest.TestCase):
                       'Взята текущая неделя', 'a.pdf'):
             self.assertIn(value, text)
 
+    def test_scheduled_build_uses_last_sunday_even_on_monday(self):
+        with tempfile.TemporaryDirectory() as folder:
+            out = Path(folder)
+            sunday = weekly.build_week_command(out, date(2026, 11, 1), scheduled=True)
+            monday = weekly.build_week_command(out, date(2026, 11, 2), scheduled=True)
+            thursday = weekly.build_week_command(out, date(2026, 11, 5), scheduled=True)
+            self.assertEqual(sunday[-2:], ['--today', '2026-11-01'])
+            self.assertEqual(monday[-2:], ['--today', '2026-11-01'])
+            self.assertEqual(thursday[-2:], ['--today', '2026-11-01'])
+            # Deliberate manual dispatch on Monday keeps the normal future-week logic.
+            self.assertNotIn('--today', weekly.build_week_command(
+                out, date(2026, 11, 2), scheduled=False))
+
     def test_environment_failure_and_no_build_report(self):
         text = weekly.report_text({}, {}, False, 'failure')
         self.assertIn('ошибка', text)

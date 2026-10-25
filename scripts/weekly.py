@@ -8,7 +8,8 @@ import os
 import shutil
 import subprocess
 import sys
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo
 from pathlib import Path
 
 from check_pdf import check_layout, check_pdf
@@ -35,6 +36,21 @@ def run(out: Path, stage: str, command: list[str], state: dict, timeout: int = 3
         raise RuntimeError(f'Этап {stage}: код {result.returncode}; см. {stage}.log в артефакте')
 
 
+def build_week_command(out: Path, run_date: date | None = None,
+                       scheduled: bool | None = None) -> list[str]:
+    """Anchor delayed Sunday cron runs to their Sunday, not Monday's next week."""
+    command = [sys.executable, 'scripts/build_week.py',
+               '--out', str(out / 'nedelya.txt'),
+               '--report', str(out / 'build-report.json')]
+    if scheduled is None:
+        scheduled = os.environ.get('TV_SCHEDULED_RUN') == 'true'
+    if scheduled:
+        today = run_date or datetime.now(ZoneInfo('Europe/Moscow')).date()
+        last_sunday = today - timedelta(days=(today.weekday() + 1) % 7)
+        command += ['--today', last_sunday.isoformat()]
+    return command
+
+
 def build(out: Path) -> None:
     state = {'build_ok': False, 'uploaded': [], 'files': [], 'stage': 'build-week'}
     write_json(out / 'run-state.json', state)
@@ -44,9 +60,7 @@ def build(out: Path) -> None:
         for path in out.glob(pattern):
             path.unlink()
     try:
-        run(out, 'build-week', [sys.executable, 'scripts/build_week.py',
-                              '--out', str(out / 'nedelya.txt'),
-                              '--report', str(out / 'build-report.json')], state, 1500)
+        run(out, 'build-week', build_week_command(out), state, 1500)
         report = read_json(out / 'build-report.json')
         monday = date.fromisoformat(report['monday'])
         if not report.get('ok') or monday.weekday() != 0:

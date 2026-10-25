@@ -23,6 +23,7 @@ env:
   TZ: Europe/Moscow
   PYTHONUNBUFFERED: '1'
   TV_DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && 'true' || 'false' }}
+  TV_SCHEDULED_RUN: ${{ github.event_name == 'schedule' && 'true' || 'false' }}
 
 jobs:
   programme:
