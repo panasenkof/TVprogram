@@ -61,6 +61,45 @@ class WeekTests(unittest.TestCase):
             self.assertFalse(out.exists())
             self.assertFalse(weekly.read_json(report)['ok'])
 
+    def test_bad_yandex_channel_does_not_abort_other_channels(self):
+        day = date(2026, 10, 26)
+        valid = ('window.__INITIAL_STATE__ = ' + json.dumps({
+            'channel': {'schedule': {'events': [{
+                'start': '2026-10-26T09:00:00+03:00',
+                'program': {'title': 'Новости'},
+            }]}}}, ensure_ascii=False))
+        def get(url, path):
+            if 'tv.yandex.ru' in url:
+                return 'window.__INITIAL_STATE__ = {broken' if '/16?' in url else valid
+            return None
+
+        problems = []
+        with patch.object(build_week, 'CHANNELS', [('Первый канал', 16), ('Россия 1', 31)]), \
+                patch.object(build_week, 'cached_get', side_effect=get), \
+                contextlib.redirect_stderr(io.StringIO()):
+            tele, yandex = build_week.load_week_sources(
+                [day], {}, None, workers=2, source_errors=problems)
+        self.assertEqual(tele, {})
+        self.assertEqual(yandex[(day, 'Первый канал')], [])
+        self.assertEqual(yandex[(day, 'Россия 1')][0]['title'], 'Новости')
+        self.assertEqual(len(problems), 1)
+        self.assertIn('Первый канал', problems[0])
+        self.assertIn(day.isoformat(), problems[0])
+
+    def test_failed_source_future_is_isolated(self):
+        day = date(2026, 10, 26)
+        def get(url, path):
+            raise RuntimeError('fixture simulated connection failure')
+        problems = []
+        with patch.object(build_week, 'CHANNELS', [('НТВ', 11)]), \
+                patch.object(build_week, 'cached_get', side_effect=get), \
+                contextlib.redirect_stderr(io.StringIO()):
+            tele, yandex = build_week.load_week_sources(
+                [day], {}, None, workers=2, source_errors=problems)
+        self.assertFalse(tele)
+        self.assertEqual(yandex[(day, 'НТВ')], [])
+        self.assertEqual(len(problems), 2)
+
     def test_yandex_wins_and_russia_one_is_don(self):
         day = date(2026, 10, 19)
         yandex = {(day, 'Первый канал'): [{
