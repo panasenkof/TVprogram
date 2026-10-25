@@ -449,12 +449,13 @@ def assemble(days: list[date], tele_html: dict[date, str], yandex_items: dict) -
         for cname, _fid in CHANNELS:
             yitems = yandex_items.get((d, cname)) or []
             titems = tele.get(cname) or []
+            lines = []
             if yitems:
                 attach_meta(yitems, titems)
                 lines = group_lines(yitems)
-                src = "yandex"
-                report["yandex_days"] += 1
-            elif titems:
+                if lines:
+                    report["yandex_days"] += 1
+            if not lines and titems:
                 tmp = []
                 for tm, title, prefix in titems:
                     hh, mm = tm.split(".")
@@ -466,15 +467,14 @@ def assemble(days: list[date], tele_html: dict[date, str], yandex_items: dict) -
                         "norm": norm_title(title),
                     })
                 lines = group_lines(tmp)
-                src = "telegraf"
-                report["telegraf_fallback"].append(f"{d.isoformat()} {cname}")
-            else:
+                if lines:
+                    report["telegraf_fallback"].append(f"{d.isoformat()} {cname}")
+            if not lines:
                 report["both_empty"].append(f"{d.isoformat()} {cname}")
                 continue
             body.append(f"== {cname}")
             body.extend(lines)
             day_ok = True
-            _ = src
         if day_ok:
             chunks.extend(body)
         else:
