@@ -37,8 +37,9 @@ class WeekTests(unittest.TestCase):
         tele = {'Первый канал': [('09.00', 'Новости', None)]}
         with tempfile.TemporaryDirectory() as folder, \
                 patch.object(build_week, 'cached_get', return_value=''), \
-                patch.object(build_week, 'load_week_sources', return_value=(
-                    {date(2026, 10, 19): 'fixture'}, {})), \
+                patch.object(build_week, 'load_week_sources', side_effect=[
+                    ({}, {}), ({date(2026, 10, 19): 'fixture'}, {}),
+                ]) as sources, \
                 patch.object(build_week, 'parse_telegraf', return_value=tele), \
                 contextlib.redirect_stdout(io.StringIO()):
             out, report = Path(folder) / 'week.txt', Path(folder) / 'report.json'
@@ -47,8 +48,30 @@ class WeekTests(unittest.TestCase):
             self.assertEqual(code, 0)
             self.assertEqual(data['monday'], '2026-10-19')
             self.assertEqual(data['kind'], 'current')
+            self.assertEqual(sources.call_count, 2)  # Check next week's Yandex before fallback.
             self.assertEqual(len(data['missing_days']), 6)
             self.assertEqual(out.read_text().count('# '), 1)
+
+    def test_next_week_yandex_can_work_without_telegraf_index(self):
+        today = date(2026, 11, 1)
+        monday = date(2026, 11, 2)
+        yandex = {(monday, name): [
+            {'hhmm': f'{h:02d}.00', 'title': f'Передача {h}'}
+            for h in range(8, 16)
+        ] for name, _ in build_week.CHANNELS[:10]}
+        with tempfile.TemporaryDirectory() as folder, \
+                patch.object(build_week, 'cached_get', return_value=''), \
+                patch.object(build_week, 'load_week_sources', return_value=({}, yandex)) as sources, \
+                contextlib.redirect_stdout(io.StringIO()):
+            out, report = Path(folder) / 'week.txt', Path(folder) / 'report.json'
+            code = build_week.main(['--today', today.isoformat(), '--out', str(out),
+                                    '--report', str(report)])
+            data = weekly.read_json(report)
+        self.assertEqual(code, 0)
+        self.assertEqual(data['monday'], monday.isoformat())
+        self.assertEqual(data['kind'], 'next')
+        self.assertEqual(sources.call_count, 1)
+        self.assertEqual(data['yandex_days'], 10)
 
     def test_no_grid_is_failure_not_fabricated_schedule(self):
         with tempfile.TemporaryDirectory() as folder, \
