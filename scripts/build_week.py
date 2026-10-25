@@ -515,23 +515,16 @@ def main(argv: list[str] | None = None) -> int:
         chosen, kind = next_week, "next"
         reason = "forced next"
     else:
-        nxt_cov = coverage(next_week)
-        if nxt_cov == 0:
-            chosen, kind = cur_week, "current"
-            reason = (
-                f"next week {next_week[0]}…{next_week[-1]} missing on telegraf index "
-                f"(0/7 days); not probing Yandex for it"
-            )
-        else:
-            chosen, kind = next_week, "next"
-            reason = f"telegraf index has {nxt_cov}/7 days of next week"
+        # Do not assume Yandex has no future grid just because the independent
+        # Telegraf index is empty. Probe both sources for next week first.
+        reason = f"telegraf index has {coverage(next_week)}/7 days of next week; probing Yandex"
 
     source_errors: list[str] = []
     tele_html, yandex_items = load_week_sources(
         chosen, index_slugs, cache, args.workers, source_errors=source_errors
     )
     if args.week == "auto" and kind == "next" and not week_is_usable(tele_html, yandex_items):
-        reason += "; fetched next week is empty → current"
+        reason += "; neither source has a usable next-week grid → current"
         chosen, kind = cur_week, "current"
         tele_html, yandex_items = load_week_sources(
             chosen, index_slugs, cache, args.workers, source_errors=source_errors
