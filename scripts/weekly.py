@@ -38,7 +38,7 @@ def run(out: Path, stage: str, command: list[str], state: dict, timeout: int = 3
 
 def build_week_command(out: Path, run_date: date | None = None,
                        scheduled: bool | None = None) -> list[str]:
-    """Anchor delayed Sunday cron runs to their Sunday, not Monday's next week."""
+    """Anchor delayed Saturday cron runs to their Saturday, not a week later."""
     command = [sys.executable, 'scripts/build_week.py',
                '--out', str(out / 'nedelya.txt'),
                '--report', str(out / 'build-report.json')]
@@ -46,8 +46,8 @@ def build_week_command(out: Path, run_date: date | None = None,
         scheduled = os.environ.get('TV_SCHEDULED_RUN') == 'true'
     if scheduled:
         today = run_date or datetime.now(ZoneInfo('Europe/Moscow')).date()
-        last_sunday = today - timedelta(days=(today.weekday() + 1) % 7)
-        command += ['--today', last_sunday.isoformat()]
+        last_saturday = today - timedelta(days=(today.weekday() - 5) % 7)
+        command += ['--today', last_saturday.isoformat()]
     return command
 
 
