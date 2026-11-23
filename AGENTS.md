@@ -16,7 +16,7 @@
 в конце запуска: `python3 scripts/notify-telegram.py` (текст через stdin).
 Секреты: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` (в Secrets выбранной среды, не в репо).
 
-Основная автоматизация — `.github/workflows/weekly-tv.yml`: воскресенье,
+Основная автоматизация — `.github/workflows/weekly-tv.yml`: суббота,
 10:00 МСК. Инструкция настройки — `GITHUB_ACTIONS.md`. Сценарий
 `scripts/weekly.py` вызывает существующие сборку и вёрстку, проверяет PDF,
 загружает оба файла на Диск через REST API (`YADISK_TOKEN`) и отправляет отчёт.
