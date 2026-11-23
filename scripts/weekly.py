@@ -48,6 +48,9 @@ def build_week_command(out: Path, run_date: date | None = None,
         today = run_date or datetime.now(ZoneInfo('Europe/Moscow')).date()
         last_saturday = today - timedelta(days=(today.weekday() - 5) % 7)
         command += ['--today', last_saturday.isoformat()]
+    week = os.environ.get('TV_WEEK', 'auto')
+    if week in ('current', 'next'):
+        command += ['--week', week]
     return command
 
 
@@ -106,7 +109,9 @@ def check_publication_readiness(report: dict) -> None:
     expected = [(monday + timedelta(days=i)).isoformat() for i in range(7)]
     if monday.weekday() != 0 or report.get('week') != expected:
         raise ValueError('В отчёте неполная или некорректная неделя; загрузка отменена')
-    if report.get('kind') != 'next':
+    explicit_current = (report.get('kind') == 'current'
+                        and os.environ.get('TV_WEEK') == 'current')
+    if report.get('kind') != 'next' and not explicit_current:
         raise ValueError('Собрана текущая, а не следующая неделя; загрузка на Диск отменена')
     missing = report.get('missing_days') or []
     if missing:

@@ -267,6 +267,14 @@ class ReportingTests(unittest.TestCase):
             self.assertNotIn('--today', weekly.build_week_command(
                 out, date(2026, 11, 2), scheduled=False))
 
+    def test_manual_week_choice_is_passed_to_build_week(self):
+        out = Path('.')
+        for value, expected in (('current', ['--week', 'current']), ('next', ['--week', 'next'])):
+            with patch.dict(os.environ, {'TV_WEEK': value}):
+                self.assertEqual(weekly.build_week_command(out, scheduled=False)[-2:], expected)
+        with patch.dict(os.environ, {'TV_WEEK': 'auto'}):
+            self.assertNotIn('--week', weekly.build_week_command(out, scheduled=False))
+
     def test_environment_failure_and_no_build_report(self):
         text = weekly.report_text({}, {}, False, 'failure')
         self.assertIn('ошибка', text)
@@ -344,6 +352,21 @@ class ReportingTests(unittest.TestCase):
             'both_empty': ['2026-11-02 НТВ', '2026-11-02 СТС'],
         }
         weekly.check_publication_readiness(report)
+
+    def test_upload_preflight_accepts_current_week_only_when_chosen(self):
+        monday = date(2026, 11, 23)
+        report = {
+            'monday': monday.isoformat(),
+            'week': [(monday + build_week.timedelta(days=i)).isoformat()
+                     for i in range(7)],
+            'kind': 'current', 'missing_days': [], 'both_empty': [],
+        }
+        with patch.dict(os.environ, {'TV_WEEK': 'current'}):
+            weekly.check_publication_readiness(report)
+        for value in ('auto', 'next'):
+            with self.subTest(week=value), patch.dict(os.environ, {'TV_WEEK': value}), \
+                    self.assertRaisesRegex(ValueError, 'текущая'):
+                weekly.check_publication_readiness(report)
 
     def test_empty_yandex_group_uses_telegraf_or_counts_missing(self):
         day = date(2026, 11, 2)

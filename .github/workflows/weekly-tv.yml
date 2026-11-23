@@ -11,6 +11,11 @@ on:
         type: boolean
         required: true
         default: true
+      week:
+        description: 'Неделя: auto — по дате, current — текущая, next — следующая'
+        type: choice
+        options: [auto, current, next]
+        default: auto
 
 permissions:
   contents: read
@@ -24,6 +29,7 @@ env:
   PYTHONUNBUFFERED: '1'
   TV_DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && 'true' || 'false' }}
   TV_SCHEDULED_RUN: ${{ github.event_name == 'schedule' && 'true' || 'false' }}
+  TV_WEEK: ${{ github.event_name == 'workflow_dispatch' && inputs.week || 'auto' }}
 
 jobs:
   programme:
